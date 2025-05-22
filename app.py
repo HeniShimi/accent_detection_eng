@@ -10,7 +10,6 @@ from pathlib import Path
 import os
 import openai
 
-openai.api_key = "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"
 
 
 # Add parent directory to path to import local modules
