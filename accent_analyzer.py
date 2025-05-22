@@ -1,14 +1,16 @@
 """
-Module for English accent analysis from audio.
+Module for English accent analysis from audio using Whisper for transcription
+and Hugging Face model for accent classification.
 """
-import whisper
 import os
 import logging
 import numpy as np
 import librosa
-import openai
 import json
 import tempfile
+import whisper
+import torch
+from transformers import pipeline
 from typing import Dict, Tuple, List, Optional
 
 # Logging configuration
@@ -37,16 +39,24 @@ class AccentAnalyzer:
         Initialize the accent analyzer.
         
         Args:
-            openai_api_key (str, optional): OpenAI API key for transcription and analysis.
-                                           If None, uses the OPENAI_API_KEY environment variable.
+            openai_api_key (str, optional): Not used with local models, kept for compatibility.
         """
-        self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
-        if not self.openai_api_key:
-            logger.warning("No OpenAI API key provided. Some features will be limited.")
+        # Load the Whisper model (smaller model for faster processing)
+        logger.info("Loading Whisper model...")
+        self.whisper_model = whisper.load_model("base")
+        logger.info("Whisper model loaded successfully")
+        
+        # Load the Hugging Face accent classification model
+        logger.info("Loading Hugging Face accent classification model...")
+        self.accent_classifier = pipeline(
+            "audio-classification", 
+            model="Jzuluaga/accent-id-commonaccent_xlsr-en-english"
+        )
+        logger.info("Accent classification model loaded successfully")
     
     def transcribe_audio(self, audio_path: str) -> Dict:
         """
-        Transcribe audio to text using OpenAI's Whisper.
+        Transcribe audio to text using local Whisper model.
         
         Args:
             audio_path (str): Path to the audio file to transcribe.
@@ -57,23 +67,21 @@ class AccentAnalyzer:
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file does not exist: {audio_path}")
         
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key required for transcription")
-        
         try:
-            openai.api_key = self.openai_api_key
+            logger.info(f"Transcribing audio with local Whisper: {audio_path}")
             
-            logger.info(f"Transcribing audio: {audio_path}")
-            with open(audio_path, "rb") as audio_file:
-                response = openai.Audio.transcribe(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="verbose_json",
-                    language="en"
-                )
+            # Transcribe with Whisper
+            result = self.whisper_model.transcribe(audio_path)
+            
+            # Format result similar to OpenAI API response
+            formatted_result = {
+                "text": result["text"],
+                "language": result.get("language", "en"),
+                "segments": result.get("segments", [])
+            }
             
             logger.info("Transcription successful")
-            return response
+            return formatted_result
         
         except Exception as e:
             logger.error(f"Error during transcription: {e}")
@@ -128,75 +136,85 @@ class AccentAnalyzer:
             logger.error(f"Error extracting audio features: {e}")
             raise RuntimeError(f"Feature extraction failed: {e}")
     
-    def analyze_accent_with_ai(self, transcription: str) -> Dict:
+    def analyze_accent_with_huggingface(self, audio_path: str) -> Dict:
         """
-        Analyze accent using OpenAI API.
+        Analyze accent using Hugging Face model.
         
         Args:
-            transcription (str): Transcribed text to analyze.
+            audio_path (str): Path to the audio file.
             
         Returns:
             Dict: Accent analysis result.
         """
-        if not transcription:
-            raise ValueError("Empty transcription")
-        
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key required for accent analysis")
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio file does not exist: {audio_path}")
         
         try:
-            openai.api_key = self.openai_api_key
+            logger.info("Analyzing accent with Hugging Face model")
             
-            logger.info("Analyzing accent with AI")
+            # Run accent classification
+            classification = self.accent_classifier(audio_path)
             
-            # Build prompt for accent analysis
-            prompt = f"""
-            Analyze the following English text transcription and determine the speaker's accent.
+            # Get the top prediction
+            top_prediction = classification[0]
+            accent_label = top_prediction["label"]
+            confidence = top_prediction["score"] * 100  # Convert to percentage
             
-            Transcription: "{transcription}"
+            # Map the model's label to our format
+            accent_mapping = {
+                "us": "American (US)",
+                "england": "British (UK)",
+                "australia": "Australian",
+                "canada": "Canadian",
+                "indian": "Indian",
+                "african": "African",
+                "scotland": "Scottish",
+                "ireland": "Irish",
+                "wales": "Welsh",
+                "hongkong": "Hong Kong",
+                "philippines": "Filipino",
+                "malaysia": "Malaysian",
+                "singapore": "Singaporean"
+            }
             
-            Please provide:
-            1. The most likely English accent (American, British, Australian, Canadian, Indian, Irish, Scottish, South African, New Zealand, or Non-native)
-            2. A confidence score from 0 to 100
-            3. A brief explanation of the accent characteristics detected
+            detected_accent = accent_mapping.get(accent_label, "Unknown")
             
-            Format your response as a JSON object with the following structure:
-            {{
-                "accent": "accent_name",
-                "confidence": score,
-                "explanation": "detailed explanation"
-            }}
-            """
+            # Generate explanation based on the detected accent
+            explanations = {
+                "American (US)": "The speech contains typical American pronunciation patterns, characterized by rhotic 'r' sounds and specific vowel qualities.",
+                "British (UK)": "The speech shows characteristic British intonation, non-rhotic 'r' sounds, and distinctive 't' pronunciation.",
+                "Australian": "The speech has distinctive Australian vowel sounds, rising intonation, and characteristic expressions.",
+                "Indian": "The speech demonstrates rhythmic patterns and consonant pronunciation common in Indian English.",
+                "Canadian": "The speech contains subtle Canadian pronunciation features, including Canadian raising of diphthongs.",
+                "Scottish": "The speech exhibits distinctive Scottish vowel sounds and strong 'r' pronunciation.",
+                "Irish": "The speech shows melodic intonation patterns and vowel sounds characteristic of Irish English.",
+                "Welsh": "The speech contains the distinctive musicality and consonant pronunciation of Welsh English.",
+                "African": "The speech demonstrates rhythmic patterns and tonal qualities common in African varieties of English."
+            }
             
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert in English accent analysis."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=500
+            explanation = explanations.get(
+                detected_accent, 
+                f"The speech was classified as {detected_accent} accent based on pronunciation patterns and speech characteristics."
             )
             
-            # Extract and parse JSON response
-            content = response.choices[0].message.content.strip()
-            # Find the start and end of JSON in the response
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
+            # Include the top 3 predictions for reference
+            top_predictions = []
+            for pred in classification[:3]:
+                mapped_accent = accent_mapping.get(pred["label"], pred["label"])
+                top_predictions.append({
+                    "accent": mapped_accent,
+                    "confidence": pred["score"] * 100
+                })
             
-            if json_start >= 0 and json_end > json_start:
-                json_str = content[json_start:json_end]
-                result = json.loads(json_str)
-                logger.info(f"Accent analysis successful: {result['accent']}")
-                return result
-            else:
-                # Fallback if JSON format is not detected
-                logger.warning("JSON format not detected in response, creating manual structure")
-                return {
-                    "accent": "Unknown",
-                    "confidence": 0,
-                    "explanation": "Unable to analyze accent from transcription."
-                }
+            result = {
+                "accent": detected_accent,
+                "confidence": confidence,
+                "explanation": explanation,
+                "top_predictions": top_predictions
+            }
+            
+            logger.info(f"Accent analysis successful: {result['accent']}")
+            return result
         
         except Exception as e:
             logger.error(f"Error during accent analysis: {e}")
@@ -225,19 +243,17 @@ class AccentAnalyzer:
                     "message": "The detected language is not English."
                 }
             
-            # Step 2: Extract audio features (for future reference)
-            audio_features = self.extract_audio_features(audio_path)
+            # Step 2: Analyze accent with Hugging Face model
+            accent_analysis = self.analyze_accent_with_huggingface(audio_path)
             
-            # Step 3: Analyze accent with AI
-            accent_analysis = self.analyze_accent_with_ai(transcription_text)
-            
-            # Step 4: Compile results
+            # Step 3: Compile results
             result = {
                 "is_english": True,
                 "accent": accent_analysis.get("accent", "Unknown"),
                 "confidence": accent_analysis.get("confidence", 0),
                 "explanation": accent_analysis.get("explanation", ""),
-                "transcription": transcription_text
+                "transcription": transcription_text,
+                "top_predictions": accent_analysis.get("top_predictions", [])
             }
             
             return result
@@ -251,7 +267,7 @@ class AccentAnalyzer:
 
 
 if __name__ == "__main__":
-    # Simple test (requires OpenAI API key)
+    # Simple test
     analyzer = AccentAnalyzer()
     test_audio = "path/to/test/audio.wav"  # Replace with a real path
     
