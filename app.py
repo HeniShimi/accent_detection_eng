@@ -10,7 +10,7 @@ from pathlib import Path
 import os
 import openai
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = "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"
 
 
 # Add parent directory to path to import local modules
