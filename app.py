@@ -10,6 +10,7 @@ from pathlib import Path
 import os
 import openai
 
+openai_api_key = st.secrets["openai"]["api_key"]
 
 
 # Add parent directory to path to import local modules
