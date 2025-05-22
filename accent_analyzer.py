@@ -1,6 +1,7 @@
 """
 Module for English accent analysis from audio.
 """
+import whisper
 import os
 import logging
 import numpy as np
