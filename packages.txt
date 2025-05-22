@@ -1,0 +1,18 @@
+"""
+Configuration pour le déploiement sur Streamlit Cloud.
+Ce fichier est utilisé pour installer les dépendances système nécessaires.
+"""
+
+# Packages système requis
+packages = [
+    "ffmpeg",
+    "libsndfile1",
+    "libsndfile1-dev"
+]
+
+# Commandes d'installation
+[setup]
+commands = [
+    "apt-get update",
+    "apt-get install -y ffmpeg libsndfile1 libsndfile1-dev"
+]

@@ -1,0 +1,25 @@
+# Configuration file for the application
+# Contains dependencies and deployment information
+
+# Python dependencies required
+dependencies = [
+    "streamlit==1.22.0",
+    "yt-dlp==2023.3.4",
+    "openai==0.27.0",
+    "librosa==0.10.0",
+    "numpy==1.24.3",
+    "matplotlib==3.7.1"
+]
+
+# Streamlit deployment configuration
+[server]
+port = 8501
+enableCORS = false
+enableXsrfProtection = true
+
+[theme]
+primaryColor = "#1E88E5"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#424242"
+font = "sans serif"
