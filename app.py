@@ -1,42 +1,32 @@
 import streamlit as st
 import subprocess
 import os
-import torch
-import torchaudio # Needed by Hugging Face models
-from transformers import pipeline, AutoModelForAudioClassification, AutoFeatureExtractor, AutoTokenizer
 import re
+from speechbrain.pretrained import EncoderClassifier
 
-# --- THIS MUST BE THE FIRST STREAMLIT COMMAND ---
+# --- STREAMLIT PAGE SETUP ---
 st.set_page_config(page_title="English Accent Detector", layout="centered")
-# -------------------------------------------------
 
-# Set up the Hugging Face accent detection pipeline
+# --- LOAD ACCENT DETECTOR MODEL FROM SPEECHBRAIN ---
 @st.cache_resource
 def load_accent_detector():
     try:
-        model_name = "Jzuluaga/accent-id-commonaccent_ecapa" # Or _xlsr-en-english if you prefer
-        st.info(f"Attempting to load model: {model_name} with trust_remote_code=True...")
-
-        detector = pipeline(
-            "audio-classification",
-            model=model_name,
-            trust_remote_code=True # Crucial for models with custom architectures or code
+        st.info("Loading SpeechBrain accent model...")
+        model = EncoderClassifier.from_hparams(
+            source="speechbrain/accent-id-commonaccent_ecapa",
+            savedir="tmpdir_accent_model"
         )
-        st.success("Pipeline initialized successfully!")
-        return detector
-
+        st.success("Accent model loaded successfully!")
+        return model
     except Exception as e:
-        st.error(f"Failed to load model or pipeline: {type(e).__name__}")
-        st.exception(e) # This will print the full traceback to the Streamlit UI
+        st.error("Failed to load SpeechBrain accent model.")
+        st.exception(e)
         return None
 
 accent_detector = load_accent_detector()
 
-# Rest of your functions remain the same
+# --- AUDIO EXTRACTION FUNCTION ---
 def extract_audio_from_video(video_url, output_audio_path="audio.wav"):
-    """
-    Extracts audio from a given video URL using yt-dlp.
-    """
     try:
         command = [
             "yt-dlp",
@@ -57,30 +47,23 @@ def extract_audio_from_video(video_url, output_audio_path="audio.wav"):
         st.error(f"Error extracting audio: {e.stderr}")
         return False
     except Exception as e:
-        st.error(f"An unexpected error occurred during audio extraction: {e}")
+        st.error(f"Unexpected error during audio extraction: {e}")
         return False
 
+# --- ACCENT ANALYSIS FUNCTION ---
 def analyze_accent(audio_path):
-    """
-    Analyzes the accent of the speaker in the given audio file.
-    Returns a dictionary with accent classification and confidence.
-    """
     if accent_detector is None:
-        st.error("Accent detector failed to load. Cannot perform analysis.")
+        st.error("Accent detector not loaded.")
         return None, None, None
 
     try:
         st.info(f"Analyzing accent in: {audio_path}")
-        results = accent_detector(audio_path)
+        out_prob, score, index, text_lab = accent_detector.classify_file(audio_path)
 
-        if not results:
-            return None, None, None
-
-        top_result = results[0]
-        accent = top_result['label']
-        score = top_result['score'] * 100 # Convert to 0-100%
-
+        accent = text_lab
+        confidence = score.item() * 100  # Convert to percentage
         summary = f"The detected accent is **{accent.replace('_', ' ').title()}**."
+
         if accent == "american_english":
             summary += " This indicates a North American English pronunciation style."
         elif accent == "british_english":
@@ -94,13 +77,12 @@ def analyze_accent(audio_path):
         else:
             summary += " Further linguistic analysis may be needed for more specific details."
 
-        return accent, score, summary
-
+        return accent, confidence, summary
     except Exception as e:
         st.error(f"Error analyzing accent: {e}")
         return None, None, None
 
-# The rest of your Streamlit UI code below here
+# --- STREAMLIT UI ---
 st.title("🗣️ English Accent Detector for Hiring")
 st.markdown("""
 This tool helps evaluate spoken English accents from public video URLs.
@@ -130,7 +112,7 @@ if st.session_state.get('analysis_started'):
                 st.session_state['audio_extracted'] = True
             else:
                 st.session_state['analysis_started'] = False
-    
+
     if st.session_state.get('audio_extracted') and not st.session_state.get('accent_analyzed'):
         if accent_detector is None:
             st.error("Cannot proceed with analysis: Model failed to load during startup.")
