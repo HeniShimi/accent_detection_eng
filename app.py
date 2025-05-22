@@ -9,13 +9,10 @@ import streamlit as st
 import time
 from pathlib import Path
 
-# Load OpenAI API key from Streamlit secrets
-openai_api_key = st.secrets["openai"]["api_key"]
-
 # Add parent directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from video_processor import VideoProcessor
-from accent_analyzer import AccentAnalyzer
+from accent_analyzer_huggingface import AccentAnalyzer
 
 # Streamlit page configuration
 st.set_page_config(
@@ -71,6 +68,12 @@ st.markdown("""
         padding: 10px;
         border-radius: 5px;
         margin: 10px 0;
+    }
+    .prediction-box {
+        background-color: #e3f2fd;
+        border-radius: 5px;
+        padding: 10px;
+        margin: 5px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -149,7 +152,7 @@ def display_results(results):
     st.markdown(f'<div class="accent-label">Detected Accent: {results["accent"]}</div>', unsafe_allow_html=True)
     confidence = results["confidence"]
     st.markdown('<div class="confidence-meter">', unsafe_allow_html=True)
-    st.markdown(f"**Confidence Score:** {confidence}%")
+    st.markdown(f"**Confidence Score:** {confidence:.1f}%")
     st.progress(confidence / 100)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -157,6 +160,15 @@ def display_results(results):
     st.markdown("**Explanation:**")
     st.markdown(results["explanation"])
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # Display top predictions if available
+    if "top_predictions" in results and results["top_predictions"]:
+        st.markdown("**Top Predictions:**")
+        for i, pred in enumerate(results["top_predictions"], 1):
+            st.markdown(
+                f'<div class="prediction-box">{i}. {pred["accent"]}: {pred["confidence"]:.1f}%</div>',
+                unsafe_allow_html=True
+            )
 
     with st.expander("View Transcription"):
         st.markdown(results["transcription"])
@@ -167,7 +179,8 @@ def process_video_url(url, temp_dir):
     """Process video URL and analyze accent."""
     try:
         video_processor = VideoProcessor(temp_dir=temp_dir)
-        accent_analyzer = AccentAnalyzer(openai_api_key=openai_api_key)
+        # Initialize AccentAnalyzer
+        accent_analyzer = AccentAnalyzer()
 
         with st.spinner("Downloading video and extracting audio..."):
             audio_path = video_processor.process_video_url(url)
@@ -221,4 +234,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
