@@ -200,7 +200,7 @@ def display_examples():
 
 def display_footer():
     """Display the application footer."""
-    st.markdown('<div class="footer">English Accent Analyzer - Developed By Heni S'himi - 2025</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer">English Accent Analyzer - Developed By Heni Shimi - 2025</div>', unsafe_allow_html=True)
 
 def main():
     """Main Streamlit application function."""
