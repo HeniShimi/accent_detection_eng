@@ -1,5 +1,5 @@
 """
-Test script for the English accent analyzer.
+Test script for the English accent analyzer with Hugging Face model.
 This script allows testing the complete pipeline with different videos.
 """
 import os
@@ -11,15 +11,14 @@ from pathlib import Path
 # Add parent directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.video_processor import VideoProcessor
-from src.accent_analyzer import AccentAnalyzer
+from src.accent_analyzer_huggingface import AccentAnalyzer
 
-def test_video_url(url, openai_api_key=None):
+def test_video_url(url):
     """
     Test accent analysis on a specific video URL.
     
     Args:
         url (str): URL of the video to test.
-        openai_api_key (str, optional): OpenAI API key.
         
     Returns:
         dict: Analysis results.
@@ -29,7 +28,7 @@ def test_video_url(url, openai_api_key=None):
     try:
         # Initialize processors
         video_processor = VideoProcessor()
-        accent_analyzer = AccentAnalyzer(openai_api_key=openai_api_key)
+        accent_analyzer = AccentAnalyzer()
         
         # Step 1: Download video and extract audio
         print("Downloading video and extracting audio...")
@@ -53,12 +52,9 @@ def test_video_url(url, openai_api_key=None):
         print(f"\nError during test: {e}")
         return {"error": str(e)}
 
-def run_test_suite(openai_api_key=None):
+def run_test_suite():
     """
     Run a test suite on different videos with different accents.
-    
-    Args:
-        openai_api_key (str, optional): OpenAI API key.
     """
     # List of test videos with different accents
     test_videos = [
@@ -83,9 +79,9 @@ def run_test_suite(openai_api_key=None):
             "expected_accent": "Indian"
         },
         {
-            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "description": "Music video (edge case)",
-            "expected_accent": "Unknown"
+            "url": "https://download.ted.com/talks/KateDarling_2018S.mp4",
+            "description": "TED Talk (Direct MP4)",
+            "expected_accent": "American"
         }
     ]
     
@@ -95,7 +91,7 @@ def run_test_suite(openai_api_key=None):
     
     for i, test in enumerate(test_videos, 1):
         print(f"\nTest {i}/{len(test_videos)}: {test['description']}")
-        result = test_video_url(test["url"], openai_api_key)
+        result = test_video_url(test["url"])
         
         # Check if result matches expectation
         expected = test["expected_accent"]
@@ -129,25 +125,20 @@ def run_test_suite(openai_api_key=None):
 
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description="Test the English accent analyzer")
+    parser = argparse.ArgumentParser(description="Test the English accent analyzer with Hugging Face model")
     parser.add_argument("--url", help="URL of the video to test")
-    parser.add_argument("--api-key", help="OpenAI API key")
     parser.add_argument("--suite", action="store_true", help="Run the complete test suite")
     
     args = parser.parse_args()
     
-    # Get OpenAI API key
-    openai_api_key = args.api_key or os.environ.get("OPENAI_API_KEY")
-    if not openai_api_key:
-        print("Warning: No OpenAI API key provided. Some features will be limited.")
-    
     # Run the test
     if args.suite:
-        run_test_suite(openai_api_key)
+        run_test_suite()
     elif args.url:
-        test_video_url(args.url, openai_api_key)
+        test_video_url(args.url)
     else:
         parser.print_help()
 
 if __name__ == "__main__":
     main()
+
