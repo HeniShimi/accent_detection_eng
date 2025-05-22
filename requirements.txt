@@ -1,12 +1,10 @@
 streamlit==1.22.0
-yt-dlp==2024.9.27
+yt-dlp==2023.3.4
 openai==0.27.0
 librosa==0.10.0
-numpy==1.25.2       # numpy supports py3.11 from 1.25.x+
-matplotlib==3.7.2   # latest patch release, compatible
+numpy==1.24.3
+matplotlib==3.7.1
 python-dotenv==1.0.0
-numba==0.60.0       # numba added py3.11 support from 0.60.0
-llvmlite==0.40.1    # llvmlite compatible from 0.40.x
-soundfile==0.12.1
+
 
 
