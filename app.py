@@ -1,238 +1,147 @@
-"""
-Streamlit application for English accent analysis from online videos.
-"""
-
-import os
-import sys
-import tempfile
 import streamlit as st
-import time
-from pathlib import Path
+import subprocess
+import os
+import torch
+import torchaudio
+from transformers import pipeline
+import re
 
-# Add parent directory to path to import local modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from video_processor import VideoProcessor
-from accent_analyzer import AccentAnalyzer
+# Set up the Hugging Face accent detection pipeline
+@st.cache_resource
+def load_accent_detector():
+    # Use a specific revision if needed for stability
+    # model_name = "Jzuluaga/accent-id-commonaccent_xlsr-en-english"
+    # detector = pipeline("audio-classification", model=model_name, revision="main") # Example with revision
+    detector = pipeline("audio-classification", model="Jzuluaga/accent-id-commonaccent_xlsr-en-english")
+    return detector
 
-# Streamlit page configuration
-st.set_page_config(
-    page_title="English Accent Analyzer",
-    page_icon="🎙️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+accent_detector = load_accent_detector()
 
-# Custom CSS styles
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1E88E5;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .sub-header {
-        font-size: 1.5rem;
-        color: #424242;
-        margin-bottom: 1rem;
-    }
-    .result-box {
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    .accent-label {
-        font-size: 1.8rem;
-        font-weight: bold;
-        color: #1E88E5;
-        margin-bottom: 10px;
-    }
-    .confidence-meter {
-        margin: 20px 0;
-    }
-    .explanation-text {
-        font-size: 1rem;
-        line-height: 1.5;
-        color: #424242;
-    }
-    .footer {
-        text-align: center;
-        margin-top: 3rem;
-        color: #9e9e9e;
-        font-size: 0.8rem;
-    }
-    .error-message {
-        color: #d32f2f;
-        background-color: #ffebee;
-        padding: 10px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
-    .prediction-box {
-        background-color: #e3f2fd;
-        border-radius: 5px;
-        padding: 10px;
-        margin: 5px 0;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-def create_temp_dir():
-    """Create a temporary directory for application files."""
-    temp_dir = os.path.join(tempfile.gettempdir(), "accent_analyzer")
-    os.makedirs(temp_dir, exist_ok=True)
-    return temp_dir
-
-def display_header():
-    """Display the application header."""
-    st.markdown('<h1 class="main-header">English Accent Analyzer</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Analyze English accents from online videos</p>', unsafe_allow_html=True)
-
-    st.markdown("""
-    This tool allows you to analyze a speaker's English accent from an online video.
-    It detects the type of accent (American, British, Australian, etc.) and provides a confidence score.
-
-    **Instructions:**
-    1. Paste a public video URL (YouTube, Loom, direct MP4, etc.)
-    2. Click "Analyze Accent"
-    3. Wait for processing (this may take a moment)
-    4. View the analysis results
-    """)
-
-def display_url_input():
-    """Display the URL input form."""
-    with st.form(key="url_form"):
-        url = st.text_input(
-            "Video URL",
-            placeholder="https://www.youtube.com/watch?v=example",
-            help="Enter a public video URL (YouTube, Loom, etc.)"
-        )
-        submit_button = st.form_submit_button(label="Analyze Accent")
-    return url, submit_button
-
-def display_processing_status():
-    """Display processing status with a progress bar."""
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    status_steps = [
-        ("Downloading video...", 20),
-        ("Extracting audio...", 40),
-        ("Transcribing audio...", 60),
-        ("Analyzing accent...", 80),
-        ("Finalizing results...", 100),
-    ]
-    for text, progress in status_steps:
-        status_text.text(text)
-        progress_bar.progress(progress)
-        time.sleep(0.5)
-
-    status_text.empty()
-    progress_bar.empty()
-
-def display_results(results):
-    """Display accent analysis results."""
-    st.markdown('<h2 class="sub-header">Analysis Results</h2>', unsafe_allow_html=True)
-    st.markdown('<div class="result-box">', unsafe_allow_html=True)
-
-    if "error" in results:
-        st.markdown(f'<div class="error-message">{results["message"]}</div>', unsafe_allow_html=True)
-        st.error(f"Error details: {results['error']}")
-        return
-
-    if not results.get("is_english", True):
-        st.markdown(
-            f'<div class="error-message">The detected language is not English. '
-            f'Detected language: {results.get("detected_language", "unknown")}</div>',
-            unsafe_allow_html=True
-        )
-        return
-
-    st.markdown(f'<div class="accent-label">Detected Accent: {results["accent"]}</div>', unsafe_allow_html=True)
-    confidence = results["confidence"]
-    st.markdown('<div class="confidence-meter">', unsafe_allow_html=True)
-    st.markdown(f"**Confidence Score:** {confidence:.1f}%")
-    st.progress(confidence / 100)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="explanation-text">', unsafe_allow_html=True)
-    st.markdown("**Explanation:**")
-    st.markdown(results["explanation"])
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Display top predictions if available
-    if "top_predictions" in results and results["top_predictions"]:
-        st.markdown("**Top Predictions:**")
-        for i, pred in enumerate(results["top_predictions"], 1):
-            st.markdown(
-                f'<div class="prediction-box">{i}. {pred["accent"]}: {pred["confidence"]:.1f}%</div>',
-                unsafe_allow_html=True
-            )
-
-    with st.expander("View Transcription"):
-        st.markdown(results["transcription"])
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def process_video_url(url, temp_dir):
-    """Process video URL and analyze accent."""
+def extract_audio_from_video(video_url, output_audio_path="audio.wav"):
+    """
+    Extracts audio from a given video URL using yt-dlp.
+    """
     try:
-        video_processor = VideoProcessor(temp_dir=temp_dir)
-        # Initialize AccentAnalyzer
-        accent_analyzer = AccentAnalyzer()
+        # Use subprocess to run yt-dlp.
+        # -x: extract audio
+        # --audio-format wav: convert audio to wav format
+        # -o: output filename template (full path)
+        command = [
+            "yt-dlp",
+            "-x",
+            "--audio-format", "wav",
+            "-o", output_audio_path,
+            video_url
+        ]
+        st.info(f"Downloading and extracting audio from: {video_url}")
+        process = subprocess.run(command, capture_output=True, text=True, check=True)
+        st.success(f"Audio extracted successfully to: {output_audio_path}")
+        if process.stdout:
+            st.code(process.stdout)
+        if process.stderr:
+            st.error(process.stderr)
+        return True
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error extracting audio: {e.stderr}")
+        return False
+    except Exception as e:
+        st.error(f"An unexpected error occurred during audio extraction: {e}")
+        return False
 
-        with st.spinner("Downloading video and extracting audio..."):
-            audio_path = video_processor.process_video_url(url)
+def analyze_accent(audio_path):
+    """
+    Analyzes the accent of the speaker in the given audio file.
+    Returns a dictionary with accent classification and confidence.
+    """
+    try:
+        # Ensure the audio file is in the correct format (16kHz, mono) for the model
+        # The Hugging Face pipeline often handles this automatically, but it's good to be aware.
+        # If issues arise, explicit resampling/mono conversion might be needed.
+        # For simplicity, we'll let the pipeline handle initial loading and preprocessing.
 
-        with st.spinner("Analyzing accent..."):
-            results = accent_analyzer.analyze_audio(audio_path)
+        st.info(f"Analyzing accent in: {audio_path}")
+        results = accent_detector(audio_path)
 
-        video_processor.cleanup(audio_path)
-        return results
+        if not results:
+            return None, None
+
+        # The model returns a list of dictionaries, typically sorted by score.
+        # The top result is what we're interested in for classification.
+        top_result = results[0]
+        accent = top_result['label']
+        score = top_result['score'] * 100 # Convert to 0-100%
+
+        # Optional: Provide a short summary based on the accent
+        summary = f"The detected accent is **{accent.replace('_', ' ').title()}**."
+        if accent == "american_english":
+            summary += " This indicates a North American English pronunciation style."
+        elif accent == "british_english":
+            summary += " This suggests a British English pronunciation style."
+        elif accent == "australian_english":
+            summary += " This implies an Australian English pronunciation style."
+        elif accent == "indian_english":
+            summary += " This points to an Indian English pronunciation style."
+        elif accent == "non_native_english":
+            summary += " The accent is identified as non-native English, indicating a significant influence from another language."
+        else:
+            summary += " Further linguistic analysis may be needed for more specific details."
+
+        return accent, score, summary
 
     except Exception as e:
-        return {
-            "error": str(e),
-            "message": "An error occurred while processing the video."
-        }
+        st.error(f"Error analyzing accent: {e}")
+        return None, None, None
 
-def display_examples():
-    """Display example URLs for testing."""
-    with st.expander("Example URLs for testing"):
-        st.markdown("""
-        Here are some example URLs you can use to test the application:
+st.set_page_config(page_title="English Accent Detector", layout="centered")
+st.title("🗣️ English Accent Detector for Hiring")
+st.markdown("""
+This tool helps evaluate spoken English accents from public video URLs.
+It extracts audio, analyzes the accent, and provides a classification and confidence score.
+""")
 
-        - **American accent**: https://www.youtube.com/watch?v=3FtGOHUkEzI  
-        - **British accent**: https://www.youtube.com/watch?v=qYlmFISLO9M  
-        - **Australian accent**: https://www.youtube.com/watch?v=4LvWYP7839Q  
-        - **Indian accent**: https://www.youtube.com/watch?v=QYlVJlmjLEc
+video_url = st.text_input("Enter Public Video URL (e.g., Loom, direct MP4 link):")
 
-        *Note: These are public example videos available on YouTube.*
-        """)
+if video_url:
+    # Validate URL format (basic check)
+    if not re.match(r"^(http|https)://[^\s/$.?#].[^\s]*$", video_url):
+        st.error("Please enter a valid URL.")
+    else:
+        audio_output_path = "extracted_audio.wav"
+        if st.button("Analyze Accent"):
+            st.session_state['analysis_started'] = True
+            st.session_state['audio_extracted'] = False
+            st.session_state['accent_analyzed'] = False
+            st.session_state['accent'] = None
+            st.session_state['confidence'] = None
+            st.session_state['summary'] = None
 
-def display_footer():
-    """Display the application footer."""
-    st.markdown('<div class="footer">English Accent Analyzer - Developed By Heni Shimi - 2025</div>', unsafe_allow_html=True)
+if st.session_state.get('analysis_started'):
+    audio_output_path = "extracted_audio.wav"
+    if not st.session_state.get('audio_extracted'):
+        with st.spinner("Extracting audio... This may take a moment."):
+            if extract_audio_from_video(video_url, audio_output_path):
+                st.session_state['audio_extracted'] = True
+            else:
+                st.session_state['analysis_started'] = False # Stop further processing if extraction fails
+    
+    if st.session_state.get('audio_extracted') and not st.session_state.get('accent_analyzed'):
+        with st.spinner("Analyzing accent..."):
+            accent, confidence, summary = analyze_accent(audio_output_path)
+            st.session_state['accent'] = accent
+            st.session_state['confidence'] = confidence
+            st.session_state['summary'] = summary
+            st.session_state['accent_analyzed'] = True
+            # Clean up the audio file after analysis (optional, but good practice for deployment)
+            if os.path.exists(audio_output_path):
+                os.remove(audio_output_path)
 
-def main():
-    """Main Streamlit application function."""
-    temp_dir = create_temp_dir()
-    display_header()
-    url, submit_button = display_url_input()
-    display_examples()
-
-    if submit_button and url:
-        if not url.startswith(("http://", "https://")):
-            st.error("Please enter a valid URL starting with http:// or https://")
+    if st.session_state.get('accent_analyzed'):
+        if st.session_state['accent'] is not None:
+            st.subheader("Analysis Results:")
+            st.write(f"**Detected Accent:** `{st.session_state['accent'].replace('_', ' ').title()}`")
+            st.write(f"**Confidence in English Accent Score:** `{st.session_state['confidence']:.2f}%`")
+            st.markdown(f"**Summary:** {st.session_state['summary']}")
         else:
-            display_processing_status()
-            results = process_video_url(url, temp_dir)
-            display_results(results)
-
-    display_footer()
-
-if __name__ == "__main__":
-    main()
+            st.warning("Could not analyze accent. Please try a different video or check the URL.")
 
 
