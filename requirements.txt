@@ -1,5 +1,5 @@
 streamlit==1.22.0
-yt-dlp==2023.14.4  # latest compatible version
+yt-dlp==2024.9.27
 openai==0.27.0
 librosa==0.10.0
 numpy==1.25.2       # numpy supports py3.11 from 1.25.x+
