@@ -7,6 +7,11 @@ import tempfile
 import streamlit as st
 import time
 from pathlib import Path
+import os
+import openai
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 
 # Add parent directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
