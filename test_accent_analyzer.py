@@ -10,8 +10,8 @@ from pathlib import Path
 
 # Add parent directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.video_processor import VideoProcessor
-from src.accent_analyzer_huggingface import AccentAnalyzer
+from video_processor import VideoProcessor
+from accent_analyzer import AccentAnalyzer
 
 def test_video_url(url):
     """
