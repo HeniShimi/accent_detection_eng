@@ -15,8 +15,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Add parent directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.video_processor import VideoProcessor
-from src.accent_analyzer import AccentAnalyzer
+from video_processor import VideoProcessor
+from accent_analyzer import AccentAnalyzer
 
 # Streamlit page configuration
 st.set_page_config(
