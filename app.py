@@ -2,30 +2,39 @@ import streamlit as st
 import subprocess
 import os
 import torch
-import torchaudio
-from transformers import pipeline
+import torchaudio # Needed by Hugging Face models
+from transformers import pipeline, AutoModelForAudioClassification, AutoFeatureExtractor, AutoTokenizer
 import re
 
 # Set up the Hugging Face accent detection pipeline
 @st.cache_resource
 def load_accent_detector():
-    # Use a specific revision if needed for stability
-    model_name = "Jzuluaga/accent-id-commonaccent_xlsr-en-english"
-    detector = pipeline("audio-classification", model=model_name, revision="main") # Example with revision
-    # detector = pipeline("audio-classification", model="Jzuluaga/accent-id-commonaccent_ecapa")
-    return detector
+    try:
+        model_name = "Jzuluaga/accent-id-commonaccent_ecapa"
+        st.info(f"Attempting to load model: {model_name} with trust_remote_code=True...")
+
+        # Option 1: Try pipeline with trust_remote_code (most direct)
+        detector = pipeline(
+            "audio-classification",
+            model=model_name,
+            trust_remote_code=True # Crucial for models with custom architectures or code
+        )
+        st.success("Pipeline initialized successfully!")
+        return detector
+
+    except Exception as e:
+        st.error(f"Failed to load model or pipeline: {type(e).__name__}")
+        st.exception(e) # This will print the full traceback to the Streamlit UI
+        return None
 
 accent_detector = load_accent_detector()
 
+# Rest of your functions remain the same
 def extract_audio_from_video(video_url, output_audio_path="audio.wav"):
     """
     Extracts audio from a given video URL using yt-dlp.
     """
     try:
-        # Use subprocess to run yt-dlp.
-        # -x: extract audio
-        # --audio-format wav: convert audio to wav format
-        # -o: output filename template (full path)
         command = [
             "yt-dlp",
             "-x",
@@ -53,25 +62,21 @@ def analyze_accent(audio_path):
     Analyzes the accent of the speaker in the given audio file.
     Returns a dictionary with accent classification and confidence.
     """
-    try:
-        # Ensure the audio file is in the correct format (16kHz, mono) for the model
-        # The Hugging Face pipeline often handles this automatically, but it's good to be aware.
-        # If issues arise, explicit resampling/mono conversion might be needed.
-        # For simplicity, we'll let the pipeline handle initial loading and preprocessing.
+    if accent_detector is None:
+        st.error("Accent detector failed to load. Cannot perform analysis.")
+        return None, None, None
 
+    try:
         st.info(f"Analyzing accent in: {audio_path}")
         results = accent_detector(audio_path)
 
         if not results:
-            return None, None
+            return None, None, None
 
-        # The model returns a list of dictionaries, typically sorted by score.
-        # The top result is what we're interested in for classification.
         top_result = results[0]
         accent = top_result['label']
         score = top_result['score'] * 100 # Convert to 0-100%
 
-        # Optional: Provide a short summary based on the accent
         summary = f"The detected accent is **{accent.replace('_', ' ').title()}**."
         if accent == "american_english":
             summary += " This indicates a North American English pronunciation style."
@@ -102,7 +107,6 @@ It extracts audio, analyzes the accent, and provides a classification and confid
 video_url = st.text_input("Enter Public Video URL (e.g., Loom, direct MP4 link):")
 
 if video_url:
-    # Validate URL format (basic check)
     if not re.match(r"^(http|https)://[^\s/$.?#].[^\s]*$", video_url):
         st.error("Please enter a valid URL.")
     else:
@@ -122,18 +126,22 @@ if st.session_state.get('analysis_started'):
             if extract_audio_from_video(video_url, audio_output_path):
                 st.session_state['audio_extracted'] = True
             else:
-                st.session_state['analysis_started'] = False # Stop further processing if extraction fails
+                st.session_state['analysis_started'] = False
     
     if st.session_state.get('audio_extracted') and not st.session_state.get('accent_analyzed'):
-        with st.spinner("Analyzing accent..."):
-            accent, confidence, summary = analyze_accent(audio_output_path)
-            st.session_state['accent'] = accent
-            st.session_state['confidence'] = confidence
-            st.session_state['summary'] = summary
-            st.session_state['accent_analyzed'] = True
-            # Clean up the audio file after analysis (optional, but good practice for deployment)
-            if os.path.exists(audio_output_path):
-                os.remove(audio_output_path)
+        # Check if the accent_detector successfully loaded
+        if accent_detector is None:
+            st.error("Cannot proceed with analysis: Model failed to load during startup.")
+            st.session_state['analysis_started'] = False # Stop further processing
+        else:
+            with st.spinner("Analyzing accent..."):
+                accent, confidence, summary = analyze_accent(audio_output_path)
+                st.session_state['accent'] = accent
+                st.session_state['confidence'] = confidence
+                st.session_state['summary'] = summary
+                st.session_state['accent_analyzed'] = True
+                if os.path.exists(audio_output_path):
+                    os.remove(audio_output_path)
 
     if st.session_state.get('accent_analyzed'):
         if st.session_state['accent'] is not None:
@@ -143,5 +151,3 @@ if st.session_state.get('analysis_started'):
             st.markdown(f"**Summary:** {st.session_state['summary']}")
         else:
             st.warning("Could not analyze accent. Please try a different video or check the URL.")
-
-
