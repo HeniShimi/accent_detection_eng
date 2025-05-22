@@ -10,7 +10,7 @@ import re
 @st.cache_resource
 def load_accent_detector():
     # Use a specific revision if needed for stability
-     model_name = "Jzuluaga/accent-id-commonaccent_xlsr-en-english"
+    model_name = "Jzuluaga/accent-id-commonaccent_xlsr-en-english"
     detector = pipeline("audio-classification", model=model_name, revision="main") # Example with revision
     # detector = pipeline("audio-classification", model="Jzuluaga/accent-id-commonaccent_ecapa")
     return detector
