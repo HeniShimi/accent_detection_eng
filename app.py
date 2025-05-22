@@ -6,14 +6,17 @@ import torchaudio # Needed by Hugging Face models
 from transformers import pipeline, AutoModelForAudioClassification, AutoFeatureExtractor, AutoTokenizer
 import re
 
+# --- THIS MUST BE THE FIRST STREAMLIT COMMAND ---
+st.set_page_config(page_title="English Accent Detector", layout="centered")
+# -------------------------------------------------
+
 # Set up the Hugging Face accent detection pipeline
 @st.cache_resource
 def load_accent_detector():
     try:
-        model_name = "Jzuluaga/accent-id-commonaccent_ecapa"
+        model_name = "Jzuluaga/accent-id-commonaccent_ecapa" # Or _xlsr-en-english if you prefer
         st.info(f"Attempting to load model: {model_name} with trust_remote_code=True...")
 
-        # Option 1: Try pipeline with trust_remote_code (most direct)
         detector = pipeline(
             "audio-classification",
             model=model_name,
@@ -97,7 +100,7 @@ def analyze_accent(audio_path):
         st.error(f"Error analyzing accent: {e}")
         return None, None, None
 
-st.set_page_config(page_title="English Accent Detector", layout="centered")
+# The rest of your Streamlit UI code below here
 st.title("🗣️ English Accent Detector for Hiring")
 st.markdown("""
 This tool helps evaluate spoken English accents from public video URLs.
@@ -129,10 +132,9 @@ if st.session_state.get('analysis_started'):
                 st.session_state['analysis_started'] = False
     
     if st.session_state.get('audio_extracted') and not st.session_state.get('accent_analyzed'):
-        # Check if the accent_detector successfully loaded
         if accent_detector is None:
             st.error("Cannot proceed with analysis: Model failed to load during startup.")
-            st.session_state['analysis_started'] = False # Stop further processing
+            st.session_state['analysis_started'] = False
         else:
             with st.spinner("Analyzing accent..."):
                 accent, confidence, summary = analyze_accent(audio_output_path)
