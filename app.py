@@ -116,4 +116,44 @@ def main():
             try:
                 with tempfile.TemporaryDirectory() as temp_dir:
                     # Load models
-                   
+                    whisper_model, accent_model = load_models()
+                    
+                    # Download audio
+                    audio_path = download_and_extract_audio(video_url, temp_dir)
+                    if not audio_path:
+                        return
+                    
+                    st.audio(audio_path, format="audio/wav")
+                    
+                    # Analyze
+                    accent, confidence, all_results = analyze_accent(audio_path, accent_model)
+                    
+                    # Display results
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Primary Result")
+                        st.metric("Detected Accent", accent)
+                        st.metric("Confidence", f"{confidence:.1f}%")
+                    
+                    with col2:
+                        st.subheader("Other Possibilities")
+                        for alt_accent, alt_conf in all_results[1:]:
+                            st.write(f"{alt_accent}: {alt_conf:.1f}%")
+                            st.progress(int(alt_conf))
+                    
+                    # Transcription
+                    st.subheader("Transcription")
+                    st.write(transcribe_audio(whisper_model, audio_path))
+                    
+                    # Visualizations
+                    st.subheader("Audio Analysis")
+                    fig, ax = plt.subplots()
+                    y, sr = librosa.load(audio_path)
+                    librosa.display.waveshow(y, sr=sr, ax=ax)
+                    st.pyplot(fig)
+                    
+            except Exception as e:
+                st.error(f"Processing error: {str(e)}")
+
+if __name__ == "__main__":
+    main()
