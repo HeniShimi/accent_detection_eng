@@ -1,6 +1,3 @@
-Here's a **professional `README.md`** for your **English Accent Detection Tool**, including setup instructions, features, and usage guidelines:
-
----
 
 # 🎙️ English Accent Detection Tool
 
