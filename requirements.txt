@@ -7,8 +7,4 @@ torch==2.0.1
 pydub==0.25.1
 transformers==4.31.0
 soundfile==0.12.1
-python-speech-features==0.6
-yt-dlp==2023.7.6
-torchaudio==2.0.2
-matplotlib==3.7.1
-speechbrain==0.5.15
+python-speech-features==0
