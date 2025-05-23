@@ -13,21 +13,24 @@ import matplotlib.pyplot as plt
 from speechbrain.pretrained import EncoderClassifier
 from huggingface_hub import login
 
-# Initialize models
 @st.cache_resource
 def load_models():
-    # Whisper for transcription
+    # Whisper model
     whisper_model = whisper.load_model("base")
     
-    # Hugging Face login (using Streamlit secrets)
+    # Hugging Face authentication
     try:
-        from huggingface_hub import login
-        login(token=st.secrets["HUGGINGFACE_TOKEN"])
+        if 'HUGGINGFACE_TOKEN' in st.secrets:
+            login(token=st.secrets["HUGGINGFACE_TOKEN"])
+            st.success("✅ Hugging Face login successful")
+        else:
+            st.error("Hugging Face token not found in secrets")
+            return None, None
     except Exception as e:
         st.error(f"Failed to log in to Hugging Face: {str(e)}")
         return None, None
     
-    # Load SpeechBrain model with auth
+    # Load accent model
     try:
         from speechbrain.pretrained import EncoderClassifier
         accent_model = EncoderClassifier.from_hparams(
