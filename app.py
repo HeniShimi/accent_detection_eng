@@ -11,6 +11,7 @@ import yt_dlp
 from pydub import AudioSegment
 import matplotlib.pyplot as plt
 from speechbrain.pretrained import EncoderClassifier
+from huggingface_hub import login
 
 # Initialize models
 @st.cache_resource
@@ -18,13 +19,25 @@ def load_models():
     # Whisper for transcription
     whisper_model = whisper.load_model("base")
     
-    # SpeechBrain for accent detection
-    accent_model = EncoderClassifier.from_hparams(
-        source="speechbrain/lang-id-voxlingua107-ecapa",
-        savedir="tmp_model"
-    )
-    
-    return whisper_model, accent_model
+    try:
+        # Get Hugging Face token from Streamlit secrets
+        hf_token = st.secrets["HUGGINGFACE_TOKEN"]
+        
+        # Login to Hugging Face Hub
+        login(token=hf_token)
+        
+        # SpeechBrain for accent detection with auth
+        accent_model = EncoderClassifier.from_hparams(
+            source="speechbrain/lang-id-voxlingua107-ecapa",
+            savedir="tmp_model",
+            use_auth_token=True
+        )
+        
+        return whisper_model, accent_model
+        
+    except Exception as e:
+        st.error(f"Failed to load models: {str(e)}")
+        return None, None
 
 # Accent label mapping for VoxLingua107
 ACCENT_LABELS = {
@@ -109,15 +122,23 @@ def main():
     st.set_page_config(page_title="Accent Analyzer", layout="wide")
     st.title("🎙️ English Accent Detection Tool")
     
+    # Check if models loaded successfully
+    if 'whisper_model' not in st.session_state or 'accent_model' not in st.session_state:
+        whisper_model, accent_model = load_models()
+        if whisper_model is None or accent_model is None:
+            return
+        st.session_state.whisper_model = whisper_model
+        st.session_state.accent_model = accent_model
+    else:
+        whisper_model = st.session_state.whisper_model
+        accent_model = st.session_state.accent_model
+    
     video_url = st.text_input("Enter video URL (YouTube/Loom/MP4):")
     
     if st.button("Analyze Accent") and video_url:
         with st.spinner("Processing..."):
             try:
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    # Load models
-                    whisper_model, accent_model = load_models()
-                    
                     # Download audio
                     audio_path = download_and_extract_audio(video_url, temp_dir)
                     if not audio_path:
