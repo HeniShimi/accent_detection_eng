@@ -19,24 +19,25 @@ def load_models():
     # Whisper for transcription
     whisper_model = whisper.load_model("base")
     
+    # Hugging Face login (using Streamlit secrets)
     try:
-        # Get Hugging Face token from Streamlit secrets
-        hf_token = st.secrets["HUGGINGFACE_TOKEN"]
-        
-        # Login to Hugging Face Hub
-        login(token=hf_token)
-        
-        # SpeechBrain for accent detection with auth
+        from huggingface_hub import login
+        login(token=st.secrets["HUGGINGFACE_TOKEN"])
+    except Exception as e:
+        st.error(f"Failed to log in to Hugging Face: {str(e)}")
+        return None, None
+    
+    # Load SpeechBrain model with auth
+    try:
+        from speechbrain.pretrained import EncoderClassifier
         accent_model = EncoderClassifier.from_hparams(
             source="speechbrain/lang-id-voxlingua107-ecapa",
             savedir="tmp_model",
             use_auth_token=True
         )
-        
         return whisper_model, accent_model
-        
     except Exception as e:
-        st.error(f"Failed to load models: {str(e)}")
+        st.error(f"Model loading failed: {str(e)}")
         return None, None
 
 # Accent label mapping for VoxLingua107
